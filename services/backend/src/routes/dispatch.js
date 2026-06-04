@@ -12,12 +12,17 @@ router.get('/recent', async (req, res) => {
       }
     });
     res.json(dispatches.map(d => ({
-      id: d.dispatch_id, volunteer_name: `${d.volunteer.first_name} ${d.volunteer.last_name}`,
-      skill: d.need.skill.skill_name, urgency: d.need.report.urgency_level,
-      status: d.status, eta_minutes: d.eta_minutes, dispatched_at: d.dispatched_at,
-      description: d.need.report.description
+      id: d.dispatch_id, 
+      volunteer_name: d.volunteer ? `${d.volunteer.first_name} ${d.volunteer.last_name}` : "Unknown Volunteer",
+      skill: d.need?.skill?.skill_name || "General", 
+      urgency: d.need?.report?.urgency_level || "MEDIUM",
+      status: d.status, 
+      eta_minutes: d.eta_minutes || 0, 
+      dispatched_at: d.dispatched_at,
+      description: d.need?.report?.description || "No description"
     })));
   } catch (error) {
+    console.error('[Dispatch /recent Error]:', error);
     res.status(500).json({ error: error.message });
   }
 });

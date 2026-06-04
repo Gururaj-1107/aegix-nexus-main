@@ -17,6 +17,7 @@ router.get('/timeline', async (req, res) => {
     const result = Object.entries(countByDate).map(([date, count]) => ({ date, count })).sort((a, b) => a.date.localeCompare(b.date));
     res.json(result);
   } catch (error) {
+    console.error('[Analytics /timeline Error]:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -44,6 +45,7 @@ router.get('/centers', async (req, res) => {
     }).sort((a, b) => b.total - a.total);
     res.json(ranked);
   } catch (error) {
+    console.error('[Analytics /centers Error]:', error);
     res.status(500).json({ error: error.message });
   }
 });

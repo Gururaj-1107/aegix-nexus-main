@@ -13,6 +13,10 @@ const nextConfig = {
     // your project has ESLint errors.
     ignoreDuringBuilds: true,
   },
+  output: 'export',
+  images: {
+    unoptimized: true,
+  },
   env: {
     NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL || "https://aegis-backend-75btxxix5a-uc.a.run.app",
   },

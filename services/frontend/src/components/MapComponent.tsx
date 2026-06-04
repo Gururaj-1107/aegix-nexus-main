@@ -1,10 +1,10 @@
 "use client";
 
 import React, { useMemo, useCallback, useState, useEffect } from 'react';
-import { GoogleMap, useLoadScript, Marker, HeatmapLayer, InfoWindow } from '@react-google-maps/api';
+import { GoogleMap, useLoadScript, Marker, InfoWindow } from '@react-google-maps/api';
 import { apiFetch } from '@/lib/api';
 
-const LIBRARIES: ("visualization")[] = ["visualization"];
+const LIBRARIES: any[] = [];
 
 const MAP_STYLES = [
   { featureType: "all", elementType: "all", stylers: [{ invert_lightness: true }, { saturation: -30 }, { lightness: -10 }, { gamma: 0.5 }] },
@@ -33,11 +33,10 @@ function makeCrossMarker() {
   return "data:image/svg+xml;charset=UTF-8," + encodeURIComponent(svg);
 }
 
-interface MapComponentProps { showHeatmap?: boolean; height?: string; }
+interface MapComponentProps { height?: string; }
 
-export default function MapComponent({ showHeatmap = true, height = '100%' }: MapComponentProps) {
+export default function MapComponent({ height = '100%' }: MapComponentProps) {
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || '';
-  const [heatmapVisible, setHeatmapVisible] = useState(showHeatmap);
   const [volunteers, setVolunteers] = useState<any[]>([]);
   const [selectedMarker, setSelectedMarker] = useState<any>(null);
 
@@ -57,10 +56,7 @@ export default function MapComponent({ showHeatmap = true, height = '100%' }: Ma
     }).catch(() => {});
   }, []);
 
-  const heatmapData = useMemo(() => {
-    if (!isLoaded || typeof google === 'undefined') return [];
-    return volunteers.map(v => ({ location: new google.maps.LatLng(v.lat, v.lng), weight: v.status === 'Active' ? 3 : 1 }));
-  }, [isLoaded, volunteers]);
+
 
   if (!apiKey) {
     return (
@@ -79,10 +75,7 @@ export default function MapComponent({ showHeatmap = true, height = '100%' }: Ma
       <GoogleMap zoom={5} center={center} mapContainerClassName="w-full h-full"
         options={{ styles: MAP_STYLES, disableDefaultUI: true, clickableIcons: false, gestureHandling: 'greedy' }}>
 
-        {heatmapVisible && heatmapData.length > 0 && (
-          <HeatmapLayer data={heatmapData}
-            options={{ radius: 30, opacity: 0.6, gradient: ['rgba(0,255,136,0)', 'rgba(0,255,136,0.4)', 'rgba(0,196,167,0.6)', 'rgba(255,184,0,0.8)', 'rgba(255,68,68,1)'] }} />
-        )}
+
 
         {volunteers.map(v => (
           <Marker key={v.id} position={{ lat: v.lat, lng: v.lng }}
@@ -101,14 +94,7 @@ export default function MapComponent({ showHeatmap = true, height = '100%' }: Ma
         )}
       </GoogleMap>
 
-      <div className="absolute bottom-4 left-4 flex gap-2 z-10">
-        <button onClick={() => setHeatmapVisible(v => !v)}
-          className={`px-3 py-1.5 rounded-lg text-xs font-semibold backdrop-blur-md border transition-all ${
-            heatmapVisible ? 'bg-[#00FF88]/20 border-[#00FF88]/40 text-[#00FF88]' : 'bg-black/40 border-white/10 text-gray-400'
-          }`}>
-          {heatmapVisible ? '🔥 Heatmap ON' : '🔥 Heatmap OFF'}
-        </button>
-      </div>
+
 
       <div className="absolute top-4 right-4 bg-black/60 backdrop-blur-xl border border-white/10 rounded-xl p-3 z-10 text-xs space-y-1.5">
         <div className="flex items-center gap-2"><span className="w-3 h-3 rounded bg-[#00FF88] inline-block" /> Active</div>

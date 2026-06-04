@@ -8,13 +8,40 @@ import { apiFetch } from '@/lib/api';
 
 interface ChatMessage { role: 'user' | 'assistant' | 'tool'; content: string; }
 
+function formatMessage(text: string) {
+  if (!text) return null;
+  return text.split('\n').map((line, i) => {
+    const parts = line.split(/(\*\*.*?\*\*)/g);
+    const elements = parts.map((part, j) => {
+      if (part.startsWith('**') && part.endsWith('**')) {
+        return <strong key={j} className="font-extrabold text-[#00FF88]">{part.slice(2, -2)}</strong>;
+      }
+      return part;
+    });
+    return (
+      <span key={i} className="block min-h-[1.2em] leading-relaxed">
+        {elements}
+      </span>
+    );
+  });
+}
+
 export default function VaultPage() {
   const [activeMode, setActiveMode] = useState<'upload' | 'voice' | 'gemini'>('gemini');
   const [isRecording, setIsRecording] = useState(false);
   const [voiceTranscript, setVoiceTranscript] = useState('');
   const [voiceProcessing, setVoiceProcessing] = useState(false);
+  const [isDemoMode, setIsDemoMode] = useState(false);
   const [geminiMessages, setGeminiMessages] = useState<ChatMessage[]>([
-    { role: 'assistant', content: 'Hello! I\'m the Aegis AI assistant powered by Gemini with RAG capabilities. I can analyze community documents, answer questions about NGO operations, or process resource allocation queries. How can I help?' }
+    { role: 'assistant', content: `As Aegis AI, a resource coordination command intelligence, I am designed to assist in emergency response, tactical logistics, and field operations. Here is what I can do to support your mission:
+
+1. **Access Emergency Protocols & Guidelines:** I can query our comprehensive knowledge base to retrieve NGO operating guidelines, disaster response protocols, safety procedures, and emergency documentation.
+
+2. **Track Medic Volunteer Locations:** I can look up live latitude/longitude coordinates of active Medic volunteers within specific zones to help you coordinate rapid deployments and assess proximity.
+
+3. **Resource Coordination & Decision Support:** I can help analyze operational data, organize logistics, and provide actionable intelligence during critical situations.
+
+How can I assist your operations today? Please provide a query, zone, or incident report to begin.` }
   ]);
   const [geminiInput, setGeminiInput] = useState('');
   const [geminiLoading, setGeminiLoading] = useState(false);
@@ -55,6 +82,7 @@ export default function VaultPage() {
 
   const startVoiceRecording = async () => {
     try {
+      setIsDemoMode(false);
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       mediaRecorderRef.current = new MediaRecorder(stream);
       chunksRef.current = [];
@@ -66,21 +94,27 @@ export default function VaultPage() {
       mediaRecorderRef.current.start();
       setIsRecording(true);
     } catch {
+      setIsDemoMode(true);
       setIsRecording(true);
-      setTimeout(() => stopVoiceRecording(), 3000);
+      setTimeout(() => stopVoiceRecording(true), 3000);
     }
   };
 
-  const stopVoiceRecording = async () => {
+  const stopVoiceRecording = async (forceDemo = false) => {
+    setIsRecording(false);
+    const useDemo = forceDemo || isDemoMode;
+
     if (mediaRecorderRef.current?.state === 'recording') {
       mediaRecorderRef.current.stop();
       mediaRecorderRef.current.stream.getTracks().forEach(t => t.stop());
     }
-    setIsRecording(false);
-    setVoiceProcessing(true);
-    await new Promise(r => setTimeout(r, 2000));
-    setVoiceTranscript('Request medical supplies and 3 medics to Zone Bravo. Situation critical.');
-    setVoiceProcessing(false);
+
+    if (useDemo) {
+      setVoiceProcessing(true);
+      await new Promise(r => setTimeout(r, 2000));
+      setVoiceTranscript('Request medical supplies and 3 medics to Zone Bravo. Situation critical.');
+      setVoiceProcessing(false);
+    }
   };
 
   const sendVoiceToBackend = async (blob: Blob) => {
@@ -191,16 +225,34 @@ export default function VaultPage() {
           <AnimatePresence mode="wait">
             {activeMode === 'gemini' && (
               <motion.div key="gemini" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex flex-col flex-1">
-                {/* Language Selector */}
-                <div className="flex items-center gap-2 mb-4">
-                  <select value={language} onChange={e => setLanguage(e.target.value)}
-                    className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-white text-xs focus:outline-none">
-                    <option value="en">English</option>
-                    <option value="hi">Hindi</option>
-                    <option value="gu">Gujarati</option>
-                    <option value="ta">Tamil</option>
-                  </select>
-                  <span className="text-xs text-gray-500">Chat language</span>
+                {/* Language Selector & Clear Chat */}
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2">
+                    <select value={language} onChange={e => setLanguage(e.target.value)}
+                      className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-white text-xs focus:outline-none">
+                      <option value="en">English</option>
+                      <option value="hi">Hindi</option>
+                      <option value="gu">Gujarati</option>
+                      <option value="ta">Tamil</option>
+                    </select>
+                    <span className="text-xs text-gray-500">Chat language</span>
+                  </div>
+                  <button 
+                    onClick={() => setGeminiMessages([
+                      { role: 'assistant', content: `As Aegis AI, a resource coordination command intelligence, I am designed to assist in emergency response, tactical logistics, and field operations. Here is what I can do to support your mission:
+
+1. **Access Emergency Protocols & Guidelines:** I can query our comprehensive knowledge base to retrieve NGO operating guidelines, disaster response protocols, safety procedures, and emergency documentation.
+
+2. **Track Medic Volunteer Locations:** I can look up live latitude/longitude coordinates of active Medic volunteers within specific zones to help you coordinate rapid deployments and assess proximity.
+
+3. **Resource Coordination & Decision Support:** I can help analyze operational data, organize logistics, and provide actionable intelligence during critical situations.
+
+How can I assist your operations today? Please provide a query, zone, or incident report to begin.` }
+                    ])}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-xs hover:bg-red-500/20 transition-all font-semibold"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" /> Clear Chat
+                  </button>
                 </div>
 
                 {/* Messages */}
@@ -223,7 +275,7 @@ export default function VaultPage() {
                         <div className={`max-w-[80%] px-4 py-3 rounded-2xl text-sm leading-relaxed ${
                           msg.role === 'assistant' ? 'bg-white/5 border border-white/8 text-gray-200 rounded-tl-sm'
                             : 'bg-gradient-to-br from-[#00FF88]/20 to-[#00C4A7]/20 border border-[#00FF88]/20 text-white rounded-tr-sm'
-                        }`}>{msg.content}</div>
+                        }`}>{formatMessage(msg.content)}</div>
                       </motion.div>
                     )
                   ))}
@@ -287,7 +339,7 @@ export default function VaultPage() {
                       <motion.div animate={{ scale: [1, 1.3], opacity: [0.5, 0] }} transition={{ duration: 1.5, repeat: Infinity, delay: 0.3 }} className="absolute w-36 h-36 rounded-full bg-red-500/20" />
                     </>
                   )}
-                  <motion.button onClick={isRecording ? stopVoiceRecording : startVoiceRecording} disabled={voiceProcessing}
+                  <motion.button onClick={isRecording ? () => stopVoiceRecording() : startVoiceRecording} disabled={voiceProcessing}
                     whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
                     className={`relative w-28 h-28 rounded-full flex items-center justify-center shadow-2xl transition-all ${
                       isRecording ? 'bg-red-500 shadow-[0_0_40px_rgba(239,68,68,0.5)]'

@@ -1,9 +1,8 @@
-const fetch = (...args) => import('node-fetch').then(({default: f}) => f(...args));
+const { GoogleGenerativeAI } = require('@google/generative-ai');
 const { translateToEnglishIfNeeded } = require('./translation');
 require('dotenv').config();
 
 const GEMINI_KEY = process.env.GEMINI_API_KEY;
-const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_KEY}`;
 
 const SYSTEM_PROMPT = `You are Aegis AI, a highly efficient NGO resource dispatch agent.
 Your role is to analyze incoming requests from field volunteers or handwritten documents and extract the key operational parameters.
@@ -20,47 +19,30 @@ Always respond with strict JSON matching this exact schema:
 No markdown. No explanation. Only valid JSON.`;
 
 async function processRequestWithAgent(textOrParsedJSON) {
-  // Try Gemini first, fall back to Vertex AI stub
   if (!GEMINI_KEY || GEMINI_KEY === 'YOUR_GEMINI_API_KEY_HERE') {
     console.warn('[Agent] No Gemini API key — using fallback stub');
     return getFallbackResponse();
   }
 
   try {
-    // Stage 1: Native Auto-Translation via Google Cloud API
     const inputString = typeof textOrParsedJSON === 'string' ? textOrParsedJSON : JSON.stringify(textOrParsedJSON);
     console.log('[Agent Pipeline] Passing through translation matrix...');
     const translatedText = await translateToEnglishIfNeeded(inputString);
 
-    // Stage 2: Structural Extraction via Gemini 2.0 Flash
-    const payload = {
-      contents: [
-        {
-          role: 'user',
-          parts: [{ text: `${SYSTEM_PROMPT}\n\nRequest: ${translatedText}` }]
-        }
-      ],
+    const genAI = new GoogleGenerativeAI(GEMINI_KEY);
+    const model = genAI.getGenerativeModel({
+      model: 'gemini-flash-latest',
       generationConfig: {
+        responseMimeType: 'application/json',
         temperature: 0.1,
-        maxOutputTokens: 512,
-        responseMimeType: 'application/json'
       }
-    };
+    }, { apiVersion: "v1beta" });
 
-    const response = await fetch(GEMINI_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
+    const prompt = `${SYSTEM_PROMPT}\n\nRequest: ${translatedText}`;
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    const text = response.text();
 
-    if (!response.ok) {
-      console.error(`[Agent] Gemini API error ${response.status}`);
-      return getFallbackResponse();
-    }
-
-    const data = await response.json();
-    const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-    
     const cleaned = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
     const parsed = JSON.parse(cleaned);
     
@@ -84,141 +66,128 @@ async function queryGeminiChat(messages, systemContext = '', prisma) {
 
   const toolLogs = [];
   
-  // Format conversational buffer
-  const contents = messages.map(m => ({
-    role: m.role === 'assistant' ? 'model' : 'user',
-    parts: [{ text: m.content }]
-  }));
-
-  if (systemContext) {
-    contents.unshift({ role: 'user', parts: [{ text: systemContext }] });
-    contents.splice(1, 0, { role: 'model', parts: [{ text: 'Understood. I am online.' }] });
-  }
-
-  // Define Agentic Tool Schema (Function Calling)
-  const tools = [{
-    functionDeclarations: [
-      {
-        name: "lookup_medic_locations",
-        description: "Fetch live lat/lng locations of active Medic volunteers to decide deployment proximity.",
-        parameters: { type: "OBJECT", properties: { zone: { type: "STRING", description: "The zone to query" } } }
-      },
-      {
-        name: "query_knowledge_base",
-        description: "Perform a RAG vector search across NGO operating guidelines, response protocols, and emergency documents.",
-        parameters: { type: "OBJECT", properties: { 
-          query: { type: "STRING", description: "The specific emergency question to search for" } 
-        }, required: ["query"] }
-      }
-    ]
-  }];
-
   try {
-    const payload = {
-      contents,
-      tools,
-      generationConfig: { temperature: 0.3, maxOutputTokens: 1024 }
-    };
-
-    let response = await fetch(GEMINI_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-
-    let data = await response.json();
-    let messageContent = data.candidates?.[0]?.content;
-    let parts = messageContent?.parts || [];
-
-    // Stage 2: Tool Execution Loop
-    let finalReply = "No response";
-
-    for (const part of parts) {
-      if (part.functionCall) {
-        const fnName = part.functionCall.name;
-        const fnArgs = part.functionCall.args;
-        console.log(`[Agent] Calling executing function: ${fnName}`, fnArgs);
-        
-        let functionResponse = {};
-
-        // Execute actual Database or RAG Logic
-        if (fnName === 'lookup_medic_locations') {
-           toolLogs.push("Agent tracking live Medics...");
-           try {
-             // Example Prisma lookups
-             const volunteers = await prisma.volunteer.findMany({
-               take: 3, select: { first_name: true, current_lat: true, current_lng: true, status: true }
-             });
-             functionResponse = { medics: volunteers };
-           } catch {
-             functionResponse = { medics: "Database connection failed, assuming 2 medics at Zone Alpha." };
-           }
-        } 
-        else if (fnName === 'query_knowledge_base') {
-           toolLogs.push("Agent querying NGO Disaster Guidelines via RAG...");
-           try {
-             // 1. Get embedding of query using Vertex/Gemini Embedding Map
-             const embRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent?key=${GEMINI_KEY}`, {
-               method: 'POST', headers: { 'Content-Type': 'application/json' },
-               body: JSON.stringify({ model: 'models/text-embedding-004', content: { parts: [{ text: fnArgs.query }] } })
-             });
-             const embData = await embRes.json();
-             const vector = embData.embedding?.values;
-             
-             if (!vector) throw new Error("Embeddings unavailable");
-
-             // 2. Perform Cosine Similarity against pgvector
-             const vectorStr = `[${vector.join(',')}]`;
-             const results = await prisma.$queryRawUnsafe(`
-               SELECT title, content, 1 - (embedding <=> $1::vector) as similarity
-               FROM "KnowledgeBase"
-               ORDER BY embedding <=> $1::vector LIMIT 2
-             `, vectorStr);
-             
-             functionResponse = { documents: results };
-           } catch (e) {
-             console.error('RAG Error:', e.message);
-             functionResponse = { documents: "RAG lookup failed. Resorting to baseline." };
-           }
+    const genAI = new GoogleGenerativeAI(GEMINI_KEY);
+    
+    // Define Agentic Tool Schema (Function Calling)
+    const tools = [{
+      functionDeclarations: [
+        {
+          name: "lookup_medic_locations",
+          description: "Fetch live lat/lng locations of active Medic volunteers to decide deployment proximity.",
+          parameters: { type: "OBJECT", properties: { zone: { type: "STRING", description: "The zone to query" } } }
+        },
+        {
+          name: "query_knowledge_base",
+          description: "Perform a RAG vector search across NGO operating guidelines, response protocols, and emergency documents.",
+          parameters: { 
+            type: "OBJECT", 
+            properties: { 
+              query: { type: "STRING", description: "The specific emergency question to search for" } 
+            }, 
+            required: ["query"] 
+          }
         }
+      ]
+    }];
 
-        // Send function response back to Gemini to complete thought
-        const followupPayload = {
-          contents: [
-            ...contents,
-            messageContent, // Original tool call
-            {
-              role: 'user',
-              parts: [{
-                functionResponse: {
-                  name: fnName,
-                  response: functionResponse
-                }
-              }]
-            }
-          ],
-          tools,
-          generationConfig: { temperature: 0.3 }
-        };
+    const model = genAI.getGenerativeModel({
+      model: 'gemini-flash-latest',
+      systemInstruction: systemContext || 'You are Aegis AI assistant, a resource coordination command intelligence.',
+      tools: tools
+    }, { apiVersion: "v1beta" });
 
-        const followupResponse = await fetch(GEMINI_URL, {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(followupPayload)
-        });
-        
-        const followupData = await followupResponse.json();
-        finalReply = followupData.candidates?.[0]?.content?.parts?.[0]?.text || "Agent processed data.";
-      } 
-      else if (part.text) {
-        finalReply = part.text;
-      }
+    // Format chat history for SDK
+    // Slice off the last message (which we send in model.sendMessage)
+    // Also filter out any leading 'model' messages since Gemini requires history to start with 'user'
+    let history = messages.slice(0, -1)
+      .filter(m => m.content && m.content.trim()) // skip empty messages
+      .map(m => ({
+        role: m.role === 'assistant' ? 'model' : 'user',
+        parts: [{ text: m.content }]
+      }));
+    // Drop leading model messages — Gemini SDK requires first history entry to be 'user'
+    while (history.length > 0 && history[0].role === 'model') {
+      history.shift();
     }
 
-    return { reply: finalReply, toolLogs };
+    console.log('[Agent] History length:', history.length, 'Roles:', history.map(h => h.role));
+
+    const chat = model.startChat({
+      history: history,
+      generationConfig: {
+        temperature: 0.3,
+        maxOutputTokens: 1024,
+      }
+    });
+
+    const latestMessage = messages[messages.length - 1].content;
+    console.log('[Agent] Sending message:', latestMessage?.substring(0, 50));
+    let result = await chat.sendMessage(latestMessage);
+    let response = result.response;
+    
+    // Check for function calls
+    let functionCalls = response.functionCalls;
+    
+    if (functionCalls && functionCalls.length > 0) {
+      const call = functionCalls[0];
+      const fnName = call.name;
+      const fnArgs = call.args;
+      console.log(`[Agent SDK] Executing function: ${fnName}`, fnArgs);
+      
+      let functionResponse = {};
+
+      if (fnName === 'lookup_medic_locations') {
+         toolLogs.push("Agent tracking live Medics...");
+         try {
+           const volunteers = await prisma.volunteer.findMany({
+             take: 3, select: { first_name: true, current_lat: true, current_lng: true, status: true }
+           });
+           functionResponse = { medics: volunteers };
+         } catch (e) {
+           console.error('[Agent SDK] Volunteer lookup failed:', e.message);
+           functionResponse = { medics: "Database connection failed, assuming 2 medics at Zone Alpha." };
+         }
+      } 
+      else if (fnName === 'query_knowledge_base') {
+         toolLogs.push("Agent querying NGO Disaster Guidelines via RAG...");
+         try {
+           // Get embedding of query using the SDK (using gemini-embedding-001 for key compatibility)
+           const embedModel = genAI.getGenerativeModel({ model: "gemini-embedding-001" }, { apiVersion: "v1beta" });
+           const embResult = await embedModel.embedContent(fnArgs.query);
+           const vector = embResult.embedding?.values;
+           
+           if (!vector) throw new Error("Embeddings unavailable");
+
+           const vectorStr = `[${vector.join(',')}]`;
+           const results = await prisma.$queryRawUnsafe(`
+             SELECT title, content, 1 - (embedding <=> $1::vector) as similarity
+             FROM "KnowledgeBase"
+             ORDER BY embedding <=> $1::vector LIMIT 2
+           `, vectorStr);
+           
+           functionResponse = { documents: results };
+         } catch (e) {
+           console.error('[Agent SDK] RAG Error:', e.message);
+           functionResponse = { documents: "RAG lookup failed. Resorting to baseline." };
+         }
+      }
+
+      // Send the tool response back to complete the turn
+      result = await chat.sendMessage([{
+        functionResponse: {
+          name: fnName,
+          response: functionResponse
+        }
+      }]);
+      response = result.response;
+    }
+
+    return { reply: response.text(), toolLogs };
 
   } catch (error) {
-    console.error('[Agent] Chat error:', error.message);
-    return { reply: 'AI service temporarily unavailable.', toolLogs: [] };
+    console.error('[Agent] Chat error:', error);
+    return { reply: `AI service error: ${error.message}`, toolLogs: [] };
   }
 }
 

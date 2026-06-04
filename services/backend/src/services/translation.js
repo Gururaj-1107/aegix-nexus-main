@@ -1,46 +1,24 @@
-const { TranslationServiceClient } = require('@google-cloud/translate').v3;
+const { GoogleGenerativeAI } = require('@google/generative-ai');
 
 /**
  * Automatically detects language and translates to English if it's not English.
  * Ensures the Agentic workflow operates smoothly regardless of volunteer language.
  */
 async function translateToEnglishIfNeeded(text) {
-  // If no GOOGLE_CLOUD_PROJECT is configured, bypass the API strictly for demo fail-safes
-  if (!process.env.GOOGLE_CLOUD_PROJECT || process.env.GOOGLE_CLOUD_PROJECT === 'your-gcp-project-id') {
+  if (!process.env.GEMINI_API_KEY || process.env.GEMINI_API_KEY === 'YOUR_GEMINI_API_KEY_HERE') {
     return text;
   }
 
   try {
-    const translationClient = new TranslationServiceClient();
-    const projectId = process.env.GOOGLE_CLOUD_PROJECT;
-    const location = 'global';
+    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+    const model = genAI.getGenerativeModel({ model: "gemini-flash-latest" }, { apiVersion: "v1beta" });
 
-    // 1. Detect Language
-    const [detectResponse] = await translationClient.detectLanguage({
-      parent: `projects/${projectId}/locations/${location}`,
-      content: text,
-    });
+    const prompt = `If the following text is in English, reply exactly with the text. If it is in another language, translate it to English and reply ONLY with the translated English text, nothing else. Text: "${text}"`;
 
-    const detectedLanguageCode = detectResponse.languages[0].languageCode;
-
-    // 2. If already English, skip
-    if (detectedLanguageCode === 'en') {
-      return text;
-    }
-
-    // 3. Otherwise, translate
-    console.log(`[Translation] Detected foreign language: ${detectedLanguageCode}. Translating...`);
+    const result = await model.generateContent(prompt);
+    const translatedText = result.response.text().trim();
     
-    const [translateResponse] = await translationClient.translateText({
-      parent: `projects/${projectId}/locations/${location}`,
-      contents: [text],
-      mimeType: 'text/plain',
-      sourceLanguageCode: detectedLanguageCode,
-      targetLanguageCode: 'en',
-    });
-
-    const translatedText = translateResponse.translations[0].translatedText;
-    console.log(`[Translation] Input translated automatically down to English pipeline.`);
+    console.log(`[Translation] Processed input text through Gemini translator pipeline.`);
     
     return translatedText;
   } catch (error) {

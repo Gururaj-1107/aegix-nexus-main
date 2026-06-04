@@ -70,13 +70,13 @@ export default function Dashboard() {
 
           <motion.h1 initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ duration: 0.8 }}
             className="font-heading text-5xl md:text-6xl lg:text-7xl font-extrabold text-white tracking-tight leading-[0.95] mb-8">
-            Command the <br/><span className="gradient-text">Command Center</span>
+            Aegis <br/><span className="gradient-text">Operations Center</span>
           </motion.h1>
 
           <motion.p initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ duration: 0.6, delay: 0.4 }}
             className="text-gray-400 text-lg max-w-3xl mx-auto leading-relaxed mb-10 font-light">
             Welcome back, <span className="text-white font-semibold">{commander.split(' ')[0]}</span>.
-            The agentic orchestration layer is actively processing <span className="text-[#6366F1]">Live RAG Context</span>.
+            The tactical dispatch matrix is active, tracking live volunteers and coordinating real-time crisis response.
           </motion.p>
 
           <motion.div initial={{ y: 30, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ duration: 0.6, delay: 0.6 }}

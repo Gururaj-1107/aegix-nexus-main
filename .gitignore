@@ -75,3 +75,6 @@ zip_project.js
 .cache/
 tmp/
 temp/
+
+# ── Secrets / Docs ───────────────────────────────────────────
+context.md

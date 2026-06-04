@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { Bell, User, Shield, LogOut, Settings, ChevronDown, BarChart3 } from 'lucide-react';
+import { Bell, User, Shield, LogOut, Settings, ChevronDown, BarChart3, Menu, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { apiFetch } from '@/lib/api';
 
@@ -33,6 +33,7 @@ export default function Header() {
   const [userAvatar, setUserAvatar] = useState('');
   const [showProfile, setShowProfile] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [notifications, setNotifications] = useState<any[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
 
@@ -205,7 +206,58 @@ export default function Header() {
             )}
           </AnimatePresence>
         </div>
+
+        {/* Mobile Menu Button */}
+        <motion.button 
+          whileHover={{ scale: 1.05 }} 
+          whileTap={{ scale: 0.95 }}
+          onClick={() => { 
+            setShowMobileMenu(p => !p); 
+            setShowProfile(false); 
+            setShowNotifications(false); 
+          }}
+          className="p-2.5 rounded-full hover:bg-white/10 transition-colors bg-white/5 lg:hidden flex items-center justify-center"
+        >
+          {showMobileMenu ? <X className="w-4 h-4 text-white" /> : <Menu className="w-4 h-4 text-gray-300" />}
+        </motion.button>
       </div>
+
+      {/* Mobile Menu Overlay */}
+      <AnimatePresence>
+        {showMobileMenu && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.25, ease: "easeInOut" }}
+            className="absolute left-0 right-0 top-[100%] z-50 bg-[#070A12]/95 backdrop-blur-2xl border-b border-[rgba(99,102,241,0.16)] flex flex-col p-6 gap-3 lg:hidden overflow-hidden shadow-2xl"
+          >
+            {NAV_LINKS.map((link, idx) => {
+              const active = pathname === link.href;
+              return (
+                <motion.div
+                  key={link.href}
+                  initial={{ x: -10, opacity: 0 }}
+                  animate={{ x: 0, opacity: 1 }}
+                  transition={{ delay: idx * 0.04 }}
+                >
+                  <Link
+                    href={link.href}
+                    onClick={() => setShowMobileMenu(false)}
+                    className={`block w-full px-5 py-3 rounded-2xl text-sm font-medium tracking-wide transition-all border ${
+                      active
+                        ? 'bg-[rgba(99,102,241,0.10)] border-[rgba(99,102,241,0.25)] text-[#00FF88] font-bold shadow-[0_0_15px_rgba(0,255,136,0.05)]'
+                        : 'border-transparent text-gray-400 hover:text-white hover:bg-white/5'
+                    }`}
+                  >
+                    {link.label}
+                  </Link>
+                </motion.div>
+              );
+            })}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.header>
   );
 }
