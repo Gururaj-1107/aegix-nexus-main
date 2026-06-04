@@ -21,9 +21,9 @@
 
 ## 🚀 Live Demo
 
-> **Frontend:** [https://aegis-frontend-75btxxix5a-uc.a.run.app](https://aegis-frontend-75btxxix5a-uc.a.run.app)
+> **Frontend:** [https://aegis-frontend-75btxxix5a-uc.a.run.app](https://aegisngo1.web.app/)
 >
-> **Backend API:** [https://aegis-backend-75btxxix5a-uc.a.run.app](https://aegis-backend-75btxxix5a-uc.a.run.app)
+
 
 ---
 
@@ -72,83 +72,6 @@ Google/                          ← Monorepo root
 
 ---
 
-## ⚡ Getting Started Locally
-
-### Prerequisites
-- [Docker Desktop](https://www.docker.com/products/docker-desktop/) installed and running
-- [Node.js 18+](https://nodejs.org/) installed
-- [Google Cloud SDK](https://cloud.google.com/sdk) (optional, for deployments)
-
-### Steps
-
-**1. Clone the repository**
-```bash
-git clone https://github.com/Gururaj-1107/aegis-nexus.git
-cd aegis-nexus
-```
-
-**2. Install backend dependencies**
-```bash
-cd services/backend
-npm install
-```
-
-**3. Install frontend dependencies**
-```bash
-cd ../frontend
-npm install
-cd ../..
-```
-
-**4. Set up environment variables**
-```bash
-# Backend
-cp services/backend/.env.example services/backend/.env
-# Edit services/backend/.env with your actual values
-
-# Frontend
-cp services/frontend/.env.local.example services/frontend/.env.local
-# Edit services/frontend/.env.local with your actual values
-```
-
-**5. Start the PostgreSQL database and C++ matcher via Docker Compose**
-```bash
-docker-compose up -d db cpp_matcher
-```
-
-**6. Push the Prisma schema to the database**
-```bash
-cd services/backend
-npx prisma db push
-```
-
-**7. Seed the database with sample data**
-```bash
-npx prisma db seed
-```
-
-**8. Start the backend server**
-```bash
-npm run dev
-# Backend runs at http://localhost:3001
-```
-
-**9. Start the frontend**
-```bash
-cd ../frontend
-npm run dev
-# Frontend runs at http://localhost:3000
-```
-
----
-
-## ☁️ Deployment on Google Cloud
-
-See the full step-by-step deployment guide: [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md)
-
-The platform is deployed on Google Cloud Run with automated CI/CD via Cloud Build. Every push to the `main` branch triggers a rebuild and redeploy of all services.
-
----
 
 ## 🔐 Environment Variables
 
@@ -188,16 +111,6 @@ The platform is deployed on Google Cloud Run with automated CI/CD via Cloud Buil
 | `GET` | `/api/reports` | No | List all community need reports |
 | `POST` | `/api/reports` | No | Submit a new community need report |
 | `GET` | `/api/dispatches` | No | List all dispatches |
-| `POST` | `/api/dispatch` | No | Create a new volunteer dispatch |
-| `PATCH` | `/api/dispatches/:id/status` | No | Update dispatch status |
-| `POST` | `/api/ai/chat` | No | Send message to Gemini AI (RAG-powered) |
-| `POST` | `/api/ai/analyze-document` | No | Upload & parse document via Document AI |
-| `POST` | `/api/ai/transcribe` | No | Transcribe audio via Speech-to-Text |
-| `POST` | `/api/ai/translate` | No | Translate text via Cloud Translation API |
-| `GET` | `/api/analytics/summary` | No | Aggregated platform metrics |
-| `GET` | `/api/announcements` | No | List all announcements |
-| `POST` | `/api/announcements` | No | Create a new announcement |
-| `GET` | `/api/notifications/:email` | No | Get notifications for a user |
 
 ---
 
