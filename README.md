@@ -21,7 +21,7 @@
 
 ## 🚀 Live Demo
 
-> **Frontend:** [https://aegisngo1.web.app/](https://aegisngo1.web.app/)
+[https://aegisngo1.web.app/](https://aegisngo1.web.app/)
 >
 
 
